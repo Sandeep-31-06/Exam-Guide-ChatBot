@@ -18,7 +18,7 @@ os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 os.makedirs(VECTOR_DB_PATH, exist_ok=True)
 
 # Note: In a real app, use environment variables for keys
-genai.configure(api_key="AIzaSyAlTvqEGnhYnXbVnRXrRu0bcXPUrdItmmA")
+genai.configure(api_key="**********************")
 
 app = Flask(__name__)
 CORS(app)
