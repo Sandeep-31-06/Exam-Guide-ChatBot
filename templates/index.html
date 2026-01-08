@@ -1,0 +1,595 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Study.AI - Premium RAG Assistant</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #6366f1;
+            --primary-dark: #4f46e5;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            transition: background-color 0.5s ease;
+        }
+
+        .glass {
+            background: rgba(255, 255, 255, 0.03);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .dark-mode {
+            background-color: #09090b;
+            color: #fafafa;
+        }
+
+        .light-mode {
+            background-color: #f8fafc;
+            color: #0f172a;
+        }
+
+        .light-mode .glass {
+            background: rgba(255, 255, 255, 0.7);
+            border: 1px solid rgba(0, 0, 0, 0.05);
+        }
+
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 4px;
+        }
+
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: rgba(99, 102, 241, 0.3);
+            border-radius: 10px;
+        }
+
+        .exam-mode-btn.active {
+            background-color: var(--primary);
+            color: white;
+            box-shadow: 0 10px 15px -3px rgba(99, 102, 241, 0.4);
+            transform: scale(1.05);
+        }
+
+        @keyframes slideIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .animate-message {
+            animation: slideIn 0.4s ease forwards;
+        }
+
+        #sidebar {
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        @media (max-width: 768px) {
+            #sidebar.closed {
+                transform: translateX(-100%);
+                width: 0;
+            }
+            #sidebar.open {
+                transform: translateX(0);
+                width: 100%;
+                position: fixed;
+                inset: 0;
+            }
+        }
+
+        .gradient-mesh {
+            position: fixed;
+            inset: 0;
+            z-index: -1;
+            background: radial-gradient(circle at 20% 30%, rgba(99, 102, 241, 0.15) 0%, transparent 50%),
+                        radial-gradient(circle at 80% 70%, rgba(168, 85, 247, 0.1) 0%, transparent 50%);
+            pointer-events: none;
+        }
+
+        .prose h3 { font-weight: 800; font-size: 1.1rem; margin-bottom: 0.5rem; color: var(--primary); margin-top: 1rem; }
+        .prose ul { list-style-type: disc; padding-left: 1.25rem; margin-bottom: 1rem; }
+        .prose p { margin-bottom: 0.75rem; }
+        
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+        textarea.vault-input {
+            background: rgba(0, 0, 0, 0.2);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            resize: none;
+        }
+        .light-mode textarea.vault-input {
+            background: rgba(255, 255, 255, 0.5);
+            border: 1px solid rgba(0, 0, 0, 0.1);
+        }
+    </style>
+</head>
+<body class="dark-mode overflow-hidden h-screen flex">
+    <div class="gradient-mesh"></div>
+
+    <!-- Sidebar Overlay for Mobile -->
+    <div id="sidebar-overlay" class="fixed inset-0 bg-black/50 z-40 hidden md:hidden" onclick="toggleSidebar()"></div>
+
+    <!-- Sidebar -->
+    <aside id="sidebar" class="open w-80 glass border-r border-white/5 flex flex-col z-50">
+        <div class="p-6 flex flex-col h-full overflow-y-auto custom-scrollbar">
+            <div class="flex items-center justify-between mb-8">
+                <div class="flex items-center gap-3">
+                    <div class="p-2 bg-indigo-600 rounded-xl text-white shadow-lg shadow-indigo-500/30">
+                        <i data-lucide="cpu" class="w-6 h-6"></i>
+                    </div>
+                    <div>
+                        <h1 class="font-black text-lg tracking-tight">STUDY.AI</h1>
+                        <span class="text-[10px] font-bold text-indigo-500 uppercase tracking-widest">Premium RAG V3.0</span>
+                    </div>
+                </div>
+                <button onclick="toggleSidebar()" class="md:hidden p-2 text-zinc-400">
+                    <i data-lucide="x" class="w-6 h-6"></i>
+                </button>
+            </div>
+
+            <div class="space-y-6">
+                <!-- Vault Card -->
+                <div class="p-5 bg-indigo-500/5 rounded-3xl border border-indigo-500/10">
+                    <div class="flex items-center justify-between mb-3">
+                        <span class="text-[10px] font-bold text-indigo-400 uppercase tracking-widest">Knowledge Vault</span>
+                        <i data-lucide="database" class="w-4 h-4 text-indigo-400"></i>
+                    </div>
+                    <p id="file-count" class="text-sm font-bold">0 Documents Indexed</p>
+                    <div class="w-full bg-white/5 h-1.5 rounded-full mt-3 overflow-hidden">
+                        <div id="index-bar" class="h-full bg-indigo-500 transition-all duration-500 w-0"></div>
+                    </div>
+                    <p id="context-status" class="text-[9px] text-zinc-500 mt-2 font-bold uppercase tracking-tighter">No active context</p>
+                </div>
+
+                <!-- Text Vault (New Section) -->
+                <div class="space-y-2">
+                    <div class="flex items-center justify-between px-1">
+                        <h3 class="text-[10px] font-black text-zinc-500 uppercase tracking-widest">Text Lab</h3>
+                        <span id="text-status-icon" class="hidden"><i data-lucide="check" class="w-3 h-3 text-emerald-500"></i></span>
+                    </div>
+                    <textarea id="pasted-text" placeholder="Paste your study notes or raw text here..." 
+                        class="vault-input w-full h-32 p-4 rounded-2xl text-xs font-medium focus:outline-none focus:ring-1 focus:ring-indigo-500/50 transition-all custom-scrollbar"></textarea>
+                </div>
+
+                <!-- Summarize Button -->
+                <button onclick="summarizeDocument()" id="summarize-btn" class="w-full py-4 px-4 bg-white/5 hover:bg-white/10 border border-white/10 rounded-2xl flex items-center justify-between group transition-all disabled:opacity-50" disabled>
+                    <div class="flex items-center gap-3">
+                        <div class="p-2 bg-purple-500/20 text-purple-400 rounded-lg">
+                            <i data-lucide="sparkles" class="w-4 h-4"></i>
+                        </div>
+                        <span class="text-sm font-bold">Master Summary</span>
+                    </div>
+                    <i data-lucide="arrow-right" class="w-4 h-4 opacity-0 group-hover:opacity-100 transition-all"></i>
+                </button>
+
+                <!-- Knowledge List -->
+                <div class="space-y-3">
+                    <div class="flex items-center justify-between">
+                        <h3 class="text-[10px] font-black text-zinc-500 uppercase tracking-widest ml-1">Documents</h3>
+                        <span id="doc-badge" class="hidden text-[8px] font-black bg-indigo-500/20 text-indigo-400 px-2 py-0.5 rounded-full uppercase">RAG ACTIVE</span>
+                    </div>
+                    <div id="file-list" class="space-y-2 max-h-[25vh] overflow-y-auto custom-scrollbar pr-2">
+                        <!-- Files added here -->
+                    </div>
+                    
+                    <input type="file" id="file-upload" class="hidden" multiple accept=".pdf,.txt">
+                    <button onclick="document.getElementById('file-upload').click()" id="upload-btn" class="w-full py-3 px-4 border-2 border-dashed border-zinc-800 hover:border-indigo-500/50 hover:bg-indigo-500/5 rounded-2xl text-zinc-500 hover:text-indigo-400 transition-all text-sm font-bold flex items-center justify-center gap-2">
+                        <i data-lucide="upload" class="w-4 h-4"></i>
+                        Upload Study Material
+                    </button>
+                </div>
+            </div>
+
+            <div class="mt-auto pt-8 border-t border-white/5">
+                <div class="flex items-center gap-3 p-4 bg-emerald-500/5 border border-emerald-500/10 rounded-2xl">
+                    <i data-lucide="shield-check" class="w-5 h-5 text-emerald-500"></i>
+                    <span class="text-[10px] font-black text-emerald-400 uppercase tracking-widest leading-tight">Secure Multi-RAG<br>Active Sync</span>
+                </div>
+            </div>
+        </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="flex-1 flex flex-col min-w-0 relative h-full">
+        <!-- Top Nav -->
+        <header class="h-20 px-4 md:px-8 flex items-center justify-between z-10 glass border-b border-white/5">
+            <div class="flex items-center gap-4">
+                <button onclick="toggleSidebar()" class="p-3 glass rounded-2xl text-zinc-400 hover:text-indigo-500 transition-all">
+                    <i data-lucide="menu" class="w-5 h-5"></i>
+                </button>
+                <div class="hidden sm:block">
+                    <h2 class="text-sm font-black uppercase tracking-tight">Exam Dashboard</h2>
+                    <p class="text-[10px] text-zinc-500 uppercase font-bold tracking-widest flex items-center gap-2">
+                        <span class="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse"></span>
+                        AI Node Connected
+                    </p>
+                </div>
+            </div>
+
+            <div class="flex items-center gap-2 md:gap-4">
+                <!-- Focus Timer -->
+                <div class="flex items-center gap-3 px-3 md:px-4 py-2 glass rounded-2xl cursor-help" title="Pomodoro Focus Timer">
+                    <i data-lucide="timer" class="w-4 h-4 text-indigo-400"></i>
+                    <span id="timer-display" class="text-xs font-mono font-bold tracking-widest">25:00</span>
+                </div>
+                
+                <div class="flex p-1 bg-white/5 border border-white/10 rounded-2xl shadow-sm">
+                    <button onclick="clearChat()" class="p-2 rounded-xl text-zinc-500 hover:text-red-400 transition-all" title="Clear Chat">
+                        <i data-lucide="trash-2" class="w-4 h-4"></i>
+                    </button>
+                    <button onclick="toggleTheme('light')" class="p-2 rounded-xl text-zinc-500 hover:text-white transition-all theme-btn" id="light-btn">
+                        <i data-lucide="sun" class="w-4 h-4"></i>
+                    </button>
+                    <button onclick="toggleTheme('dark')" class="p-2 rounded-xl text-white bg-indigo-600 shadow-lg theme-btn" id="dark-btn">
+                        <i data-lucide="moon" class="w-4 h-4"></i>
+                    </button>
+                </div>
+            </div>
+        </header>
+
+        <!-- Chat Area -->
+        <div id="chat-container" class="flex-1 overflow-y-auto px-4 md:px-8 py-6 custom-scrollbar">
+            <div id="messages" class="max-w-4xl mx-auto flex flex-col gap-8">
+                <!-- Initial Hero -->
+                <div id="hero" class="py-12 text-center animate-message">
+                    <div class="inline-block p-4 bg-indigo-500/5 border border-indigo-500/10 rounded-full mb-6">
+                        <i data-lucide="zap" class="w-8 h-8 text-indigo-500"></i>
+                    </div>
+                    <h2 class="text-3xl md:text-5xl font-black tracking-tighter mb-4 bg-gradient-to-b from-white to-zinc-600 bg-clip-text text-transparent">
+                        Personal Study AI.
+                    </h2>
+                    <p class="text-zinc-400 text-base md:text-lg max-w-xl mx-auto font-medium mb-8">
+                        Upload PDFs or paste notes in the <b>Text Lab</b> to ground your answers in verified facts.
+                    </p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Input Section -->
+        <div class="p-4 md:p-8">
+            <div class="max-w-4xl mx-auto">
+                <!-- Mode Toggles -->
+                <div class="flex flex-wrap items-center gap-2 p-1.5 bg-white/5 border border-white/10 rounded-[2rem] mb-6 w-full md:w-fit shadow-2xl overflow-x-auto no-scrollbar">
+                    <button onclick="setExamMode('2-mark')" class="exam-mode-btn active flex-1 md:flex-none whitespace-nowrap px-4 md:px-6 py-2.5 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all" data-mode="2-mark">2-Mark</button>
+                    <button onclick="setExamMode('5-mark')" class="exam-mode-btn flex-1 md:flex-none whitespace-nowrap px-4 md:px-6 py-2.5 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all" data-mode="5-mark">5-Mark</button>
+                    <button onclick="setExamMode('10-mark')" class="exam-mode-btn flex-1 md:flex-none whitespace-nowrap px-4 md:px-6 py-2.5 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all" data-mode="10-mark">10-Mark</button>
+                    <button onclick="setExamMode('viva')" class="exam-mode-btn flex-1 md:flex-none whitespace-nowrap px-4 md:px-6 py-2.5 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all" data-mode="viva">Viva</button>
+                </div>
+
+                <!-- Input Box -->
+                <form id="chat-form" class="relative group">
+                    <div class="absolute -inset-1 bg-gradient-to-r from-indigo-500 to-purple-600 rounded-[3rem] blur opacity-0 group-focus-within:opacity-10 transition-opacity"></div>
+                    <div class="relative flex items-center bg-white/5 border border-white/10 rounded-[3rem] shadow-2xl p-2 pl-6 md:pl-8 backdrop-blur-xl">
+                        <input type="text" id="user-input" placeholder="Ask a question from your vault..." class="flex-1 bg-transparent py-3 md:py-4 text-sm font-bold focus:outline-none placeholder:text-zinc-600">
+                        <button type="submit" id="send-btn" class="p-3 md:p-4 bg-indigo-600 text-white rounded-full hover:bg-indigo-700 transition-all shadow-xl shadow-indigo-500/20 disabled:opacity-50">
+                            <i data-lucide="send" class="w-5 h-5"></i>
+                        </button>
+                    </div>
+                </form>
+                
+                <div class="mt-4 md:mt-6 flex flex-wrap justify-center gap-4 md:gap-6 text-[9px] md:text-[10px] font-black text-zinc-500 uppercase tracking-[0.2em]">
+                    <span class="flex items-center gap-2"><i data-lucide="check-circle" class="w-3 h-3 text-indigo-500"></i> RAG Grounded</span>
+                    <span class="flex items-center gap-2"><i data-lucide="shield" class="w-3 h-3 text-indigo-500"></i> Secure Node</span>
+                    <span class="flex items-center gap-2"><i data-lucide="book-open" class="w-3 h-3 text-indigo-500"></i> Exam-Ready</span>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- JS Logic -->
+    <script>
+        const API_BASE = "http://127.0.0.1:5000"; 
+
+        let theme = 'dark';
+        let examMode = '2-mark';
+        let documents = [];
+        let isThinking = false;
+        let timerSeconds = 1500; 
+
+        window.onload = () => {
+            lucide.createIcons();
+            startTimer();
+            handleResize();
+            window.addEventListener('resize', handleResize);
+            
+            // Listen for changes in pasted text to update UI
+            document.getElementById('pasted-text').addEventListener('input', updateVaultStatus);
+        };
+
+        function toggleSidebar() {
+            const sidebar = document.getElementById('sidebar');
+            const overlay = document.getElementById('sidebar-overlay');
+            if (sidebar.classList.contains('closed')) {
+                sidebar.classList.remove('closed');
+                sidebar.classList.add('open');
+                overlay.classList.remove('hidden');
+            } else {
+                sidebar.classList.remove('open');
+                sidebar.classList.add('closed');
+                overlay.classList.add('hidden');
+            }
+        }
+
+        function handleResize() {
+            const sidebar = document.getElementById('sidebar');
+            const overlay = document.getElementById('sidebar-overlay');
+            if (window.innerWidth > 768) {
+                sidebar.classList.remove('closed');
+                sidebar.classList.add('open');
+                overlay.classList.add('hidden');
+            } else {
+                sidebar.classList.add('closed');
+                sidebar.classList.remove('open');
+            }
+        }
+
+        function toggleTheme(mode) {
+            theme = mode;
+            document.body.className = `${mode}-mode overflow-hidden h-screen flex`;
+            const darkBtn = document.getElementById('dark-btn');
+            const lightBtn = document.getElementById('light-btn');
+            if (mode === 'dark') {
+                darkBtn.className = 'p-2 rounded-xl text-white bg-indigo-600 shadow-lg';
+                lightBtn.className = 'p-2 rounded-xl text-zinc-500 hover:text-white transition-all';
+            } else {
+                lightBtn.className = 'p-2 rounded-xl text-white bg-indigo-600 shadow-lg';
+                darkBtn.className = 'p-2 rounded-xl text-zinc-500 hover:text-slate-900 transition-all';
+            }
+        }
+
+        // --- File Upload Logic ---
+        document.getElementById('file-upload').onchange = async (e) => {
+            const files = Array.from(e.target.files);
+            if (!files.length) return;
+
+            const uploadBtn = document.getElementById('upload-btn');
+            const indexBar = document.getElementById('index-bar');
+            
+            uploadBtn.disabled = true;
+            uploadBtn.innerHTML = `<div class="w-4 h-4 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin"></div> Indexing...`;
+            indexBar.style.width = '30%';
+
+            const formData = new FormData();
+            files.forEach(file => formData.append("files", file));
+
+            try {
+                const response = await fetch(`${API_BASE}/upload`, {
+                    method: 'POST',
+                    body: formData
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    indexBar.style.width = '100%';
+                    files.forEach(file => {
+                        const doc = { id: Math.random(), name: file.name };
+                        documents.push(doc);
+                        addFileToList(doc);
+                    });
+                    updateVaultStatus();
+                } else {
+                    alert("Failed to upload documents.");
+                    indexBar.style.width = '0%';
+                }
+            } catch (err) {
+                console.error(err);
+                alert("Connection error: Ensure Python backend is running.");
+            } finally {
+                uploadBtn.disabled = false;
+                uploadBtn.innerHTML = `<i data-lucide="upload" class="w-4 h-4"></i> Upload Study Material`;
+                lucide.createIcons();
+            }
+        };
+
+        function addFileToList(doc) {
+            const list = document.getElementById('file-list');
+            const item = document.createElement('div');
+            item.className = 'flex items-center justify-between p-3 glass rounded-2xl group border border-white/5 animate-message';
+            item.innerHTML = `
+                <div class="flex items-center gap-3">
+                    <i data-lucide="file-text" class="w-4 h-4 text-indigo-400"></i>
+                    <span class="text-[11px] font-bold truncate w-32">${doc.name}</span>
+                </div>
+                <button onclick="removeDocument(${doc.id})" class="opacity-0 group-hover:opacity-100 p-1 text-zinc-500 hover:text-red-500 transition-all">
+                    <i data-lucide="trash-2" class="w-3 h-3"></i>
+                </button>
+            `;
+            list.appendChild(item);
+            lucide.createIcons();
+        }
+
+        function removeDocument(id) {
+            documents = documents.filter(d => d.id !== id);
+            const list = document.getElementById('file-list');
+            list.innerHTML = '';
+            documents.forEach(doc => addFileToList(doc));
+            updateVaultStatus();
+        }
+
+        function updateVaultStatus() {
+            const pastedText = document.getElementById('pasted-text').value.trim();
+            const hasPasted = pastedText.length > 0;
+            const hasFiles = documents.length > 0;
+
+            document.getElementById('file-count').innerText = `${documents.length} Documents Indexed`;
+            document.getElementById('summarize-btn').disabled = !(hasFiles || hasPasted);
+            
+            const contextStatus = document.getElementById('context-status');
+            const docBadge = document.getElementById('doc-badge');
+            const textStatusIcon = document.getElementById('text-status-icon');
+
+            if (hasFiles || hasPasted) {
+                let msg = "";
+                if (hasFiles && hasPasted) msg = "Files + Text active";
+                else if (hasFiles) msg = `${documents.length} Files indexed`;
+                else msg = "Text context active";
+
+                contextStatus.innerText = msg;
+                contextStatus.className = "text-[9px] text-indigo-400 mt-2 font-bold uppercase tracking-tighter";
+                docBadge.classList.remove('hidden');
+                if (hasPasted) textStatusIcon.classList.remove('hidden'); else textStatusIcon.classList.add('hidden');
+            } else {
+                contextStatus.innerText = "No active context";
+                contextStatus.className = "text-[9px] text-zinc-500 mt-2 font-bold uppercase tracking-tighter";
+                docBadge.classList.add('hidden');
+                textStatusIcon.classList.add('hidden');
+                document.getElementById('index-bar').style.width = '0%';
+            }
+        }
+
+        function setExamMode(mode) {
+            examMode = mode;
+            document.querySelectorAll('.exam-mode-btn').forEach(btn => {
+                btn.classList.toggle('active', btn.dataset.mode === mode);
+            });
+        }
+
+        // --- Chat & AI Interaction ---
+        document.getElementById('chat-form').onsubmit = async (e) => {
+            e.preventDefault();
+            const input = document.getElementById('user-input');
+            const val = input.value.trim();
+            const pastedText = document.getElementById('pasted-text').value.trim();
+            
+            if (!val || isThinking) return;
+            if (documents.length === 0 && !pastedText) {
+                alert("Please upload a PDF or paste text into the Text Lab first.");
+                return;
+            }
+
+            removeHero();
+            addMessage('user', val);
+            input.value = '';
+            await processAIRequest(val, examMode, pastedText);
+        };
+
+        async function summarizeDocument() {
+            const pastedText = document.getElementById('pasted-text').value.trim();
+            if (isThinking || (documents.length === 0 && !pastedText)) return;
+            
+            removeHero();
+            addMessage('ai', "Synthesizing vault data for Master Summary...", 'summary-loading');
+            await processAIRequest("Provide a holistic, detailed summary of all the material. Focus on core concepts.", "summary", pastedText, true);
+            
+            const loadingMsg = document.getElementById('summary-loading');
+            if (loadingMsg) loadingMsg.remove();
+        }
+
+        async function processAIRequest(question, mode, pastedText, isSummary = false) {
+            isThinking = true;
+            showThinking();
+
+            try {
+                const response = await fetch(`${API_BASE}/ask`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        question, 
+                        mode,
+                        text: pastedText // Sending pasted text to backend
+                    })
+                });
+
+                const data = await response.json();
+                hideThinking();
+
+                if (response.ok) {
+                    addMessage('ai', data.answer, null, true, isSummary);
+                } else {
+                    addMessage('ai', "System Error: " + (data.error || "RAG engine failure."));
+                }
+            } catch (err) {
+                hideThinking();
+                addMessage('ai', "Connection Lost. Is the Python server running on port 5000?");
+            } finally {
+                isThinking = false;
+            }
+        }
+
+        function addMessage(role, content, id = null, isHtml = false, isSummary = false) {
+            const container = document.getElementById('messages');
+            const msg = document.createElement('div');
+            msg.className = `flex flex-col ${role === 'user' ? 'items-end' : 'items-start'} animate-message mb-4`;
+            if (id) msg.id = id;
+
+            const bubbleClass = role === 'user' 
+                ? 'bg-indigo-600 text-white shadow-indigo-500/20 rounded-3xl rounded-tr-none' 
+                : 'glass border border-white/5 text-zinc-100 rounded-3xl rounded-tl-none shadow-2xl';
+
+            msg.innerHTML = `
+                <div class="${bubbleClass} max-w-[90%] md:max-w-[85%] p-4 md:p-6 group relative">
+                    ${role === 'ai' && !isSummary ? `
+                    <div class="flex items-center gap-2 mb-4">
+                        <span class="px-2 py-0.5 bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 text-[8px] font-black uppercase rounded-full">Mode: ${examMode}</span>
+                        <span class="px-2 py-0.5 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[8px] font-black uppercase rounded-full">Source: RAG Sync</span>
+                    </div>` : ''}
+                    <div class="text-[14px] md:text-[15px] leading-relaxed prose prose-invert">
+                        ${isHtml ? formatAIContent(content) : content.replace(/\n/g, '<br>')}
+                    </div>
+                </div>
+            `;
+            container.appendChild(msg);
+            document.getElementById('chat-container').scrollTop = document.getElementById('chat-container').scrollHeight;
+            lucide.createIcons();
+        }
+
+        function formatAIContent(text) {
+            return text
+                .replace(/^### (.*$)/gim, '<h3>$1</h3>')
+                .replace(/^\* (.*$)/gim, '<li>$1</li>')
+                .replace(/(<li>.*<\/li>)/gim, '<ul>$1</ul>')
+                .replace(/<\/ul><ul>/gim, '') 
+                .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+        }
+
+        function showThinking() {
+            const container = document.getElementById('messages');
+            const loader = document.createElement('div');
+            loader.id = 'thinking-indicator';
+            loader.className = 'flex items-start gap-4 mb-8 animate-pulse';
+            loader.innerHTML = `
+                <div class="glass border border-white/5 rounded-3xl p-6 shadow-xl flex items-center gap-4">
+                    <div class="w-8 h-8 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
+                    <p class="text-[10px] font-black uppercase tracking-widest text-indigo-500">Retrieving Vault Nodes...</p>
+                </div>
+            `;
+            container.appendChild(loader);
+            document.getElementById('chat-container').scrollTop = document.getElementById('chat-container').scrollHeight;
+        }
+
+        function hideThinking() {
+            const loader = document.getElementById('thinking-indicator');
+            if (loader) loader.remove();
+        }
+
+        function removeHero() {
+            const hero = document.getElementById('hero');
+            if (hero) hero.remove();
+        }
+
+        function clearChat() {
+            const container = document.getElementById('messages');
+            container.innerHTML = `<div id="hero" class="py-12 text-center animate-message">...</div>`;
+            location.reload(); // Quick reset
+        }
+
+        function startTimer() {
+            setInterval(() => {
+                if (timerSeconds > 0) {
+                    timerSeconds--;
+                    const mins = Math.floor(timerSeconds / 60);
+                    const secs = timerSeconds % 60;
+                    document.getElementById('timer-display').innerText = 
+                        `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+                }
+            }, 1000);
+        }
+    </script>
+</body>
+</html>
